@@ -1,13 +1,14 @@
 package sample;
-
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
-import javafx.scene.control.Button;
-import javafx.scene.control.CheckBox;
-import javafx.scene.control.Label;
-import javafx.scene.control.TextField;
-
+import javafx.scene.control.*;
+import java.io.IOException;
 import java.rmi.RemoteException;
+
+
+
 
 public class launchScreenController {
     @FXML
@@ -27,10 +28,11 @@ public class launchScreenController {
 
 
 
-    public void handleLaunchButton(ActionEvent event) throws RemoteException {
+    public void handleLaunchButton(ActionEvent event) throws RemoteException, IOException {
         if ((!(port_textField.getText().isEmpty())) && (!(ip_textField.getText().isEmpty()))) {
             if (Integer.parseInt(port_textField.getText()) > 1024) {
                 BackupServer server = new BackupServer(ip_textField.getText(), Integer.parseInt(port_textField.getText()));
+                server.getData();
                 running_label.setText("Server is running...");
             } else {
                 running_label.setText("Invalid port! Try again.");
