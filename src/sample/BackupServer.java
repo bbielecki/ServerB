@@ -3,13 +3,11 @@ package sample;
 import com.healthmarketscience.rmiio.*;
 import com.healthmarketscience.rmiio.RemoteInputStream;
 import com.healthmarketscience.rmiio.RemoteInputStreamClient;
-import com.sun.corba.se.spi.activation.Server;
-import com.sun.org.apache.xerces.internal.util.SynchronizedSymbolTable;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
-import javafx.scene.control.Tab;
+import javafx.fxml.Initializable;
 
 import java.io.*;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.rmi.Naming;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
@@ -23,8 +21,9 @@ import java.util.Date;
 
 public class BackupServer extends UnicastRemoteObject implements FileInterface, Serializable{
 
+    public int numberOfChunks;
     public BackupServer(String ip,int port) throws IOException {
-        super(Registry.REGISTRY_PORT);
+        super(port);
 
         try{
             LocateRegistry.createRegistry(port);
@@ -45,7 +44,7 @@ public class BackupServer extends UnicastRemoteObject implements FileInterface, 
             Date date = new Date(lastModified);
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
             String newdate = sdf.format(date);
-            Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/backuperdb","Jacek","password");
+            Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/backuperdb","root","janek2901");
             Statement st = conn.createStatement();
             String query = "INSERT INTO backuperdb.files VALUES('" + filename + "','" + newdate + "', '"+(Integer.parseInt(getVersion(filename))+1)+"','" + path + "')";
             st.executeUpdate(query);
@@ -58,7 +57,7 @@ public class BackupServer extends UnicastRemoteObject implements FileInterface, 
 
     }
 
-
+    //TODO sprzątanie po tempFile'ach
     public String writeToFile(InputStream stream, String filename, String extension, long lastModified) throws IOException, RemoteException {
         FileOutputStream output = null;
         File file = null;
@@ -72,9 +71,10 @@ public class BackupServer extends UnicastRemoteObject implements FileInterface, 
             int readBytes;
             do {
                 readBytes = stream.read(result);
-                if (readBytes > 0)
+                if (readBytes > 0){
                     output.write(result, 0, readBytes);
-                System.out.println("Zapisuje...");
+                    numberOfChunks++;
+                }
             } while(readBytes != -1);
             System.out.println(file.length());
 
@@ -83,6 +83,7 @@ public class BackupServer extends UnicastRemoteObject implements FileInterface, 
 
         } catch (Exception e) {
             e.printStackTrace();
+            System.out.println("ELO");
         } finally{
             if(output != null){
                 output.close();
@@ -97,6 +98,7 @@ public class BackupServer extends UnicastRemoteObject implements FileInterface, 
 
 
         }
+        //numberOfChunks = 0;
         return "D:\\\\Server\\\\" + filename + "-v" + (Integer.parseInt(getVersion(filename))+1) + extension;
 
     }
@@ -119,19 +121,67 @@ public class BackupServer extends UnicastRemoteObject implements FileInterface, 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         ObjectOutputStream oos = new ObjectOutputStream(baos);
         oos.writeObject(getData());
-        System.out.println("Zapisałem obiekt!");
         oos.flush();
         oos.close();
         InputStream ois = new ByteArrayInputStream(baos.toByteArray());
         try{
             input = new SimpleRemoteInputStream(ois);
-            System.out.println("Zapisano do strumienia!");
         }
 
         catch (Exception e){
             e.printStackTrace();
         }
         return input.export();
+
+    }
+
+    public int getChunk() throws RemoteException{
+        return numberOfChunks;
+    }
+
+    public RemoteInputStream chunkStream() throws RemoteException, IOException{
+        SimpleRemoteInputStream input = null;
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(baos);
+        oos.writeInt(numberOfChunks);
+        oos.flush();
+        oos.close();
+        InputStream ois = new ByteArrayInputStream(baos.toByteArray());
+        try{
+            input = new SimpleRemoteInputStream(ois);
+        }
+
+        catch (Exception e){
+            e.printStackTrace();
+        }
+        return input.export();
+    }
+
+    public long getFileSize(String fName, String ver) throws RemoteException {
+        long fsize = 0L;
+
+        Connection conn = null;
+        try {
+            conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/backuperdb","root","janek2901");
+            Statement st = conn.createStatement();
+            ResultSet rs = st.executeQuery("SELECT * FROM backuperdb.files WHERE (filename=" + "'" + fName + "'" + " AND version= "
+                    + "" + ver + ")");
+
+            if(rs.next()){
+                String filePath = rs.getString("path");
+                Path fPath = Paths.get(filePath);
+                File f = fPath.toFile();
+                fsize = f.length();
+            }
+
+
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+
+        return fsize;
     }
 
 
@@ -141,16 +191,15 @@ public class BackupServer extends UnicastRemoteObject implements FileInterface, 
 
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
             String newdate = sdf.format(date);
-            Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/backuperdb","Jacek","password");
+            Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/backuperdb","root","janek2901");
             Statement st = conn.createStatement();
             ResultSet rs = st.executeQuery("SELECT * FROM backuperdb.files WHERE (filename=" + "'" + name + "'" + " AND lastmodified= "
                     + "'" + newdate + "')");
-            rs.next();
-            if (rs.wasNull()){
-                lol = false;
+            if (rs.next()){
+                lol = true;
             }
             else{
-                lol = true;
+                lol = false;
             }
         }
         catch (SQLException e){
@@ -163,7 +212,7 @@ public class BackupServer extends UnicastRemoteObject implements FileInterface, 
     public String getVersion(String filename){
         String ver = "";
         try{
-            Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/backuperdb","Jacek","password");
+            Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/backuperdb","root","janek2901");
             Statement st = conn.createStatement();
             String query = "SELECT MAX(version) FROM backuperdb.files WHERE filename=" + "'"+ filename + "'";
             ResultSet rs = st.executeQuery(query);
@@ -186,7 +235,7 @@ public class BackupServer extends UnicastRemoteObject implements FileInterface, 
         String[] srv = null;
         try{
             ArrayList<String> list = new ArrayList<>();
-            Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/backuperdb","Jacek","password");
+            Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/backuperdb","root","janek2901");
             Statement st = conn.createStatement();
             String query = "SELECT * FROM backuperdb.files";
             ResultSet rs = st.executeQuery(query);
@@ -204,9 +253,5 @@ public class BackupServer extends UnicastRemoteObject implements FileInterface, 
         }
         return srv;
     }
-
-
-
-
 
 }
