@@ -184,6 +184,27 @@ public class BackupServer extends UnicastRemoteObject implements FileInterface, 
         return fsize;
     }
 
+    public void deleteFile(String fName, String ver, String fPath) throws RemoteException{
+
+        Connection conn = null;
+        try {
+            conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/backuperdb", "root", "janek2901");
+            Statement st = conn.createStatement();
+
+            Path path = Paths.get(fPath);
+            File f = path.toFile();
+            f.delete();
+
+            ResultSet rs = st.executeQuery("DELETE FROM backuperdb.files WHERE (filename=" + "'" + fName + "'" + " AND version= "
+                    + "" + ver + ")");
+
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+    }
+
 
     public boolean checkFileOnServer(String name, Date date) throws RemoteException{
         boolean lol = false;
