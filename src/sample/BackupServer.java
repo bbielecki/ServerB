@@ -57,7 +57,6 @@ public class BackupServer extends UnicastRemoteObject implements FileInterface, 
 
     }
 
-    //TODO sprzątanie po tempFile'ach
     public String writeToFile(InputStream stream, String filename, String extension, long lastModified) throws IOException, RemoteException {
         FileOutputStream output = null;
         File file = null;
@@ -96,9 +95,7 @@ public class BackupServer extends UnicastRemoteObject implements FileInterface, 
                 System.out.println("Zamykam strumień...");
             }
 
-
         }
-        //numberOfChunks = 0;
         return "D:\\\\Server\\\\" + filename + "-v" + (Integer.parseInt(getVersion(filename))+1) + extension;
 
     }
@@ -114,6 +111,10 @@ public class BackupServer extends UnicastRemoteObject implements FileInterface, 
             e.printStackTrace();
         }
         return input.export();
+    }
+
+    public void resetChunks() throws RemoteException{
+        numberOfChunks = 0;
     }
 
     public RemoteInputStream tableStream() throws RemoteException, IOException{
@@ -155,54 +156,6 @@ public class BackupServer extends UnicastRemoteObject implements FileInterface, 
             e.printStackTrace();
         }
         return input.export();
-    }
-
-    public long getFileSize(String fName, String ver) throws RemoteException {
-        long fsize = 0L;
-
-        Connection conn = null;
-        try {
-            conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/backuperdb","root","janek2901");
-            Statement st = conn.createStatement();
-            ResultSet rs = st.executeQuery("SELECT * FROM backuperdb.files WHERE (filename=" + "'" + fName + "'" + " AND version= "
-                    + "" + ver + ")");
-
-            if(rs.next()){
-                String filePath = rs.getString("path");
-                Path fPath = Paths.get(filePath);
-                File f = fPath.toFile();
-                fsize = f.length();
-            }
-
-
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
-
-        return fsize;
-    }
-
-    public void deleteFile(String fName, String ver, String fPath) throws RemoteException{
-
-        Connection conn = null;
-        try {
-            conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/backuperdb", "root", "janek2901");
-            Statement st = conn.createStatement();
-
-            Path path = Paths.get(fPath);
-            File f = path.toFile();
-            f.delete();
-
-            ResultSet rs = st.executeQuery("DELETE FROM backuperdb.files WHERE (filename=" + "'" + fName + "'" + " AND version= "
-                    + "" + ver + ")");
-
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
     }
 
 
@@ -274,5 +227,56 @@ public class BackupServer extends UnicastRemoteObject implements FileInterface, 
         }
         return srv;
     }
+
+
+    public long getFileSize(String fName, String ver) throws RemoteException {
+        long fsize = 0L;
+
+        Connection conn = null;
+        try {
+            conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/backuperdb","root","janek2901");
+            Statement st = conn.createStatement();
+            ResultSet rs = st.executeQuery("SELECT * FROM backuperdb.files WHERE (filename=" + "'" + fName + "'" + " AND version= "
+                    + "'" + ver + "')");
+
+            if(rs.next()){
+                String filePath = rs.getString("path");
+                Path fPath = Paths.get(filePath);
+                File f = fPath.toFile();
+                fsize = f.length();
+            }
+
+
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+
+        return fsize;
+    }
+
+
+    public void deleteFile(String fName, String ver, String fPath) throws RemoteException{
+
+        Connection conn = null;
+        try {
+            conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/backuperdb", "root", "janek2901");
+            Statement st = conn.createStatement();
+
+            Path path = Paths.get(fPath);
+            File f = path.toFile();
+            f.delete();
+
+            st.executeUpdate("DELETE FROM backuperdb.files WHERE (filename=" + "'" + fName + "'" + " AND version= "
+                    + "'" + ver + "')");
+
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+    }
+
 
 }
